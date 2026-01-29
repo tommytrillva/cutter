@@ -105,6 +105,18 @@ color_grading:
     chromatic_aberration: 0.0
     vignette: 0.0
 
+# GPU Acceleration Settings (RTX 4090 optimized)
+gpu:
+  # Enable GPU acceleration (auto-detects NVIDIA GPU)
+  enabled: true
+  # NVENC encoder preset: ultrafast, fast, medium, slow, quality, max_quality
+  # For RTX 4090, "quality" or "max_quality" recommended for best results
+  encoder_preset: "quality"
+  # Use NVDEC for hardware video decoding
+  hardware_decode: true
+  # CUDA device index (0 for single GPU)
+  device: 0
+
 # Export Settings
 export:
   # Output formats: mp4, json
@@ -116,16 +128,21 @@ export:
   # Video encoding settings
   video:
     codec: "h264"
-    # Quality (CRF): 0-51, lower = better quality, 18 recommended
+    # Quality (CRF/CQ): 0-51, lower = better quality
+    # With GPU: 18-20 recommended (uses NVENC CQ mode)
+    # RTX 4090 can handle quality=15 for near-lossless
     quality: 18
     # Frame rate
     fps: 30
+    # Bitrate (optional, overrides quality for specific target)
+    # For TikTok/Reels: "12M", YouTube: "20M", YouTube 4K: "50M"
+    bitrate: null
   # Audio encoding settings
   audio:
     codec: "aac"
     bitrate: "192k"
   # Platform presets (overrides resolution)
-  # Options: tiktok, instagram_reels, youtube_shorts, youtube, web
+  # Options: tiktok, instagram_reels, youtube_shorts, youtube, youtube_4k, web
   platform: "tiktok"
 
 # Edit Variation Settings
