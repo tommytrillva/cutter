@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cutter Motion Graphics Renderer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+        }
+
+        #canvas {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Video Layer */
+        #video-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Transition Layer */
+        #transition-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* Text Layer */
+        #text-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .text-item {
+            position: absolute;
+            color: white;
+            text-align: center;
+            opacity: 0;
+            transform-origin: center center;
+        }
+
+        .text-glow {
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.8),
+                         0 0 40px rgba(255, 255, 255, 0.6),
+                         0 0 60px rgba(255, 255, 255, 0.4);
+        }
+
+        .text-shadow {
+            text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Particle Layer */
+        #particle-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        /* Color Grade Layer */
+        #color-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            mix-blend-mode: normal;
+        }
+
+        /* Animation Keyframes */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        @keyframes slideInLeft {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideInUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes slideInDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes scaleUp {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes scaleDown {
+            from { transform: scale(1); opacity: 1; }
+            to { transform: scale(0); opacity: 0; }
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes blurIn {
+            from { filter: blur(20px); opacity: 0; }
+            to { filter: blur(0); opacity: 1; }
+        }
+
+        @keyframes blurOut {
+            from { filter: blur(0); opacity: 1; }
+            to { filter: blur(20px); opacity: 0; }
+        }
+
+        @keyframes glitchIn {
+            0% { transform: translate(-5px, 5px); opacity: 0; filter: hue-rotate(90deg); }
+            25% { transform: translate(5px, -5px); opacity: 0.5; }
+            50% { transform: translate(-3px, 3px); opacity: 0.7; filter: hue-rotate(180deg); }
+            75% { transform: translate(3px, -3px); opacity: 0.9; }
+            100% { transform: translate(0, 0); opacity: 1; filter: hue-rotate(0deg); }
+        }
+
+        /* Transition Animations */
+        @keyframes wipeLeft {
+            from { clip-path: inset(0 100% 0 0); }
+            to { clip-path: inset(0 0 0 0); }
+        }
+
+        @keyframes wipeRight {
+            from { clip-path: inset(0 0 0 100%); }
+            to { clip-path: inset(0 0 0 0); }
+        }
+
+        @keyframes wipeUp {
+            from { clip-path: inset(100% 0 0 0); }
+            to { clip-path: inset(0 0 0 0); }
+        }
+
+        @keyframes wipeDown {
+            from { clip-path: inset(0 0 100% 0); }
+            to { clip-path: inset(0 0 0 0); }
+        }
+
+        @keyframes zoomIn {
+            from { transform: scale(1.5); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes zoomOut {
+            from { transform: scale(0.5); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes irisIn {
+            from { clip-path: circle(0% at center); }
+            to { clip-path: circle(100% at center); }
+        }
+
+        @keyframes dissolve {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Particle Fall Animation */
+        @keyframes particleFall {
+            from { transform: translateY(-100vh) rotate(0deg); }
+            to { transform: translateY(100vh) rotate(720deg); }
+        }
+
+        @keyframes particleExplode {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas">
+        <video id="video-layer" muted></video>
+        <div id="transition-layer"></div>
+        <div id="text-layer"></div>
+        <div id="particle-layer"></div>
+        <div id="color-layer"></div>
+    </div>
+
+    <script>
+        // Global state
+        window.timelineData = null;
+        window.sourceVideo = null;
+        window.rendererReady = false;
+
+        // Renderer class
+        class MotionGraphicsRenderer {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.videoLayer = document.getElementById('video-layer');
+                this.transitionLayer = document.getElementById('transition-layer');
+                this.textLayer = document.getElementById('text-layer');
+                this.particleLayer = document.getElementById('particle-layer');
+                this.colorLayer = document.getElementById('color-layer');
+
+                this.currentFrame = 0;
+                this.fps = 30;
+                this.particles = [];
+            }
+
+            async initialize(timelineData, sourceVideo) {
+                this.timeline = timelineData;
+                this.fps = timelineData.metadata?.fps || 30;
+
+                // Load source video
+                if (sourceVideo) {
+                    this.videoLayer.src = sourceVideo;
+                    await new Promise(resolve => {
+                        this.videoLayer.onloadeddata = resolve;
+                        this.videoLayer.onerror = resolve;
+                    });
+                }
+
+                // Apply initial color grading
+                this.applyColorGrading(timelineData.color_grading);
+
+                console.log('Renderer initialized');
+                window.rendererReady = true;
+            }
+
+            renderFrame(frameIndex, frameTime) {
+                this.currentFrame = frameIndex;
+
+                // Render video clip
+                this.renderVideoClip(frameTime);
+
+                // Render transitions
+                this.renderTransition(frameTime);
+
+                // Render text animations
+                this.renderTextAnimations(frameTime);
+
+                // Render particles
+                this.renderParticles(frameTime);
+            }
+
+            renderVideoClip(frameTime) {
+                const timeline = this.timeline.timeline || [];
+
+                // Find active clip
+                let activeClip = null;
+                for (const clip of timeline) {
+                    if (clip.type === 'video_clip') {
+                        const start = clip.timeline_start || 0;
+                        const end = clip.timeline_end || 0;
+                        if (frameTime >= start && frameTime < end) {
+                            activeClip = clip;
+                            break;
+                        }
+                    }
+                }
+
+                if (activeClip && this.videoLayer.src) {
+                    const sourceTime = activeClip.source_start + (frameTime - activeClip.timeline_start);
+                    this.videoLayer.currentTime = sourceTime;
+                    this.videoLayer.style.opacity = '1';
+                } else {
+                    this.videoLayer.style.opacity = '0';
+                }
+            }
+
+            renderTransition(frameTime) {
+                const transitions = this.timeline.transitions || [];
+
+                // Clear previous transition
+                this.transitionLayer.innerHTML = '';
+                this.transitionLayer.style.cssText = '';
+
+                for (const trans of transitions) {
+                    const start = trans.timeline_start || 0;
+                    const duration = trans.duration || 0.3;
+                    const end = start + duration;
+
+                    if (frameTime >= start && frameTime < end) {
+                        const progress = (frameTime - start) / duration;
+                        this.applyTransition(trans.style, progress);
+                        break;
+                    }
+                }
+            }
+
+            applyTransition(style, progress) {
+                const layer = this.transitionLayer;
+
+                switch (style) {
+                    case 'wipe_left':
+                        layer.style.clipPath = `inset(0 ${(1 - progress) * 100}% 0 0)`;
+                        layer.style.background = '#000';
+                        break;
+                    case 'wipe_right':
+                        layer.style.clipPath = `inset(0 0 0 ${(1 - progress) * 100}%)`;
+                        layer.style.background = '#000';
+                        break;
+                    case 'dissolve':
+                        layer.style.background = `rgba(0, 0, 0, ${1 - progress})`;
+                        break;
+                    case 'zoom_in':
+                        layer.style.transform = `scale(${1 + (1 - progress) * 0.5})`;
+                        layer.style.opacity = progress;
+                        break;
+                    case 'iris_in':
+                        layer.style.clipPath = `circle(${progress * 100}% at center)`;
+                        layer.style.background = '#000';
+                        break;
+                    case 'glitch':
+                        if (Math.random() > 0.5) {
+                            layer.style.transform = `translateX(${(Math.random() - 0.5) * 20}px)`;
+                            layer.style.filter = `hue-rotate(${Math.random() * 360}deg)`;
+                        }
+                        break;
+                    default:
+                        layer.style.opacity = 1 - progress;
+                }
+            }
+
+            renderTextAnimations(frameTime) {
+                const textAnims = this.timeline.animations?.text || [];
+
+                // Clear previous text
+                this.textLayer.innerHTML = '';
+
+                for (const anim of textAnims) {
+                    const start = anim.start_time || 0;
+                    const duration = anim.duration || 3;
+                    const end = start + duration;
+
+                    if (frameTime >= start && frameTime < end) {
+                        this.renderText(anim, frameTime - start, duration);
+                    }
+                }
+            }
+
+            renderText(anim, localTime, duration) {
+                const textEl = document.createElement('div');
+                textEl.className = 'text-item';
+                textEl.textContent = anim.text || '';
+
+                // Apply styles
+                textEl.style.fontFamily = anim.font_family || 'Arial';
+                textEl.style.fontSize = `${anim.font_size || 96}px`;
+                textEl.style.color = anim.font_color || '#FFFFFF';
+                textEl.style.fontWeight = 'bold';
+
+                // Position
+                const posX = (anim.position_x || 0.5) * 100;
+                const posY = (anim.position_y || 0.5) * 100;
+                textEl.style.left = `${posX}%`;
+                textEl.style.top = `${posY}%`;
+                textEl.style.transform = 'translate(-50%, -50%)';
+
+                // Effects
+                let classes = [];
+                if (anim.glow_enabled) classes.push('text-glow');
+                if (anim.drop_shadow) classes.push('text-shadow');
+                textEl.className = 'text-item ' + classes.join(' ');
+
+                // Animation phases
+                const entranceDuration = 0.5;
+                const exitDuration = 0.5;
+                const exitStart = duration - exitDuration;
+
+                if (localTime < entranceDuration) {
+                    // Entrance
+                    const progress = localTime / entranceDuration;
+                    this.applyTextEntrance(textEl, anim.entrance || 'fade_in', progress);
+                } else if (localTime > exitStart) {
+                    // Exit
+                    const progress = (localTime - exitStart) / exitDuration;
+                    this.applyTextExit(textEl, anim.exit || 'fade_out', progress);
+                } else {
+                    // Visible
+                    textEl.style.opacity = '1';
+                }
+
+                this.textLayer.appendChild(textEl);
+            }
+
+            applyTextEntrance(el, type, progress) {
+                const eased = this.easeOutCubic(progress);
+
+                switch (type) {
+                    case 'fade_in':
+                        el.style.opacity = eased;
+                        break;
+                    case 'slide_in':
+                        el.style.opacity = eased;
+                        el.style.transform = `translate(-50%, ${-50 + (1 - eased) * 50}%)`;
+                        break;
+                    case 'scale_up':
+                        el.style.opacity = eased;
+                        el.style.transform = `translate(-50%, -50%) scale(${eased})`;
+                        break;
+                    case 'bounce_in':
+                        const bounce = Math.sin(progress * Math.PI * 1.5) * (1 - progress) * 0.3;
+                        el.style.opacity = Math.min(1, progress * 2);
+                        el.style.transform = `translate(-50%, -50%) scale(${eased + bounce})`;
+                        break;
+                    case 'blur_in':
+                        el.style.opacity = eased;
+                        el.style.filter = `blur(${(1 - eased) * 20}px)`;
+                        break;
+                    case 'glitch_in':
+                        el.style.opacity = eased;
+                        if (progress < 0.8) {
+                            const offset = (1 - progress) * 10;
+                            el.style.transform = `translate(calc(-50% + ${(Math.random() - 0.5) * offset}px), calc(-50% + ${(Math.random() - 0.5) * offset}px))`;
+                            el.style.filter = `hue-rotate(${Math.random() * 360}deg)`;
+                        }
+                        break;
+                    case 'typewriter':
+                        const chars = Math.floor(el.textContent.length * progress);
+                        el.textContent = el.textContent.substring(0, chars);
+                        el.style.opacity = '1';
+                        break;
+                    default:
+                        el.style.opacity = eased;
+                }
+            }
+
+            applyTextExit(el, type, progress) {
+                const eased = this.easeInCubic(progress);
+
+                switch (type) {
+                    case 'fade_out':
+                        el.style.opacity = 1 - eased;
+                        break;
+                    case 'slide_out':
+                        el.style.opacity = 1 - eased;
+                        el.style.transform = `translate(-50%, ${-50 - eased * 50}%)`;
+                        break;
+                    case 'scale_down':
+                        el.style.opacity = 1 - eased;
+                        el.style.transform = `translate(-50%, -50%) scale(${1 - eased})`;
+                        break;
+                    case 'blur_out':
+                        el.style.opacity = 1 - eased;
+                        el.style.filter = `blur(${eased * 20}px)`;
+                        break;
+                    default:
+                        el.style.opacity = 1 - eased;
+                }
+            }
+
+            renderParticles(frameTime) {
+                const particleEffects = this.timeline.animations?.particles || [];
+
+                // Clear old particles
+                this.particleLayer.innerHTML = '';
+
+                for (const effect of particleEffects) {
+                    const start = effect.start_time || 0;
+                    const duration = effect.duration || 2;
+                    const end = start + duration;
+
+                    if (frameTime >= start && frameTime < end) {
+                        const localTime = frameTime - start;
+                        this.renderParticleEffect(effect, localTime, duration);
+                    }
+                }
+            }
+
+            renderParticleEffect(effect, localTime, duration) {
+                const type = effect.particle_type || 'confetti';
+                const density = effect.density || 'medium';
+                const colors = effect.colors?.length ? effect.colors : this.getDefaultColors(type);
+
+                const count = { low: 20, medium: 50, high: 100 }[density] || 50;
+                const progress = localTime / duration;
+
+                for (let i = 0; i < count; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle';
+
+                    // Deterministic random based on index
+                    const seed = i * 0.618033988749;
+                    const rand = (n) => ((seed * n) % 1);
+
+                    const color = colors[Math.floor(rand(7) * colors.length)];
+                    const size = 5 + rand(11) * 15;
+                    const startX = rand(13) * 100;
+                    const startY = -10 + rand(17) * 20;
+
+                    switch (type) {
+                        case 'confetti':
+                            particle.style.width = `${size}px`;
+                            particle.style.height = `${size * 0.6}px`;
+                            particle.style.backgroundColor = color;
+                            particle.style.borderRadius = '2px';
+                            particle.style.left = `${startX}%`;
+                            particle.style.top = `${startY + progress * 120}%`;
+                            particle.style.transform = `rotate(${progress * 720 + rand(19) * 360}deg)`;
+                            particle.style.opacity = 1 - Math.max(0, (progress - 0.7) / 0.3);
+                            break;
+
+                        case 'sparkles':
+                            particle.style.width = `${size}px`;
+                            particle.style.height = `${size}px`;
+                            particle.style.backgroundColor = color;
+                            particle.style.borderRadius = '50%';
+                            particle.style.boxShadow = `0 0 ${size}px ${color}`;
+                            particle.style.left = `${startX}%`;
+                            particle.style.top = `${30 + rand(23) * 40}%`;
+                            particle.style.opacity = Math.sin(progress * Math.PI) * (0.5 + rand(29) * 0.5);
+                            break;
+
+                        case 'rain':
+                            particle.style.width = '2px';
+                            particle.style.height = `${10 + rand(31) * 20}px`;
+                            particle.style.backgroundColor = 'rgba(200, 200, 255, 0.5)';
+                            particle.style.left = `${startX}%`;
+                            particle.style.top = `${-10 + progress * 130}%`;
+                            break;
+
+                        case 'snow':
+                            particle.style.width = `${size * 0.5}px`;
+                            particle.style.height = `${size * 0.5}px`;
+                            particle.style.backgroundColor = 'white';
+                            particle.style.borderRadius = '50%';
+                            particle.style.left = `${startX + Math.sin(progress * 10 + rand(37) * 6.28) * 5}%`;
+                            particle.style.top = `${-5 + progress * 110}%`;
+                            particle.style.opacity = 0.8;
+                            break;
+
+                        case 'explosion':
+                            const angle = rand(41) * Math.PI * 2;
+                            const distance = progress * 50 * (0.5 + rand(43) * 0.5);
+                            particle.style.width = `${size * (1 - progress * 0.5)}px`;
+                            particle.style.height = `${size * (1 - progress * 0.5)}px`;
+                            particle.style.backgroundColor = color;
+                            particle.style.borderRadius = '50%';
+                            particle.style.left = `calc(50% + ${Math.cos(angle) * distance}vw)`;
+                            particle.style.top = `calc(50% + ${Math.sin(angle) * distance}vh)`;
+                            particle.style.opacity = 1 - progress;
+                            break;
+
+                        case 'bubbles':
+                            particle.style.width = `${size}px`;
+                            particle.style.height = `${size}px`;
+                            particle.style.border = '2px solid rgba(255, 255, 255, 0.5)';
+                            particle.style.borderRadius = '50%';
+                            particle.style.left = `${startX}%`;
+                            particle.style.top = `${110 - progress * 120}%`;
+                            particle.style.opacity = 0.7 - Math.max(0, (progress - 0.8) / 0.2);
+                            break;
+                    }
+
+                    this.particleLayer.appendChild(particle);
+                }
+            }
+
+            getDefaultColors(type) {
+                switch (type) {
+                    case 'confetti':
+                        return ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+                    case 'sparkles':
+                        return ['#ffffff', '#ffffd0', '#ffd700'];
+                    case 'explosion':
+                        return ['#ff4500', '#ff6600', '#ff8c00', '#ffa500'];
+                    default:
+                        return ['#ffffff'];
+                }
+            }
+
+            applyColorGrading(grading) {
+                if (!grading) return;
+
+                const filters = [];
+
+                // Basic adjustments
+                if (grading.saturation !== 1) {
+                    filters.push(`saturate(${grading.saturation})`);
+                }
+                if (grading.contrast !== 1) {
+                    filters.push(`contrast(${grading.contrast})`);
+                }
+                if (grading.brightness !== 1) {
+                    filters.push(`brightness(${grading.brightness})`);
+                }
+                if (grading.hue_shift) {
+                    filters.push(`hue-rotate(${grading.hue_shift}deg)`);
+                }
+
+                // Effects
+                if (grading.blur) {
+                    filters.push(`blur(${grading.blur}px)`);
+                }
+
+                // Apply preset color grading
+                if (grading.preset) {
+                    const presetFilters = this.getPresetFilters(grading.preset);
+                    filters.push(...presetFilters);
+                }
+
+                this.videoLayer.style.filter = filters.join(' ');
+
+                // Vignette overlay
+                if (grading.vignette) {
+                    this.colorLayer.style.background = `radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,${grading.vignette}) 100%)`;
+                }
+
+                // Grain overlay
+                if (grading.grain) {
+                    this.colorLayer.style.backgroundImage = `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)' opacity='${grading.grain}'/%3E%3C/svg%3E")`;
+                }
+            }
+
+            getPresetFilters(preset) {
+                const presets = {
+                    cinematic: ['contrast(1.1)', 'saturate(0.9)', 'brightness(0.95)'],
+                    cyberpunk: ['contrast(1.2)', 'saturate(1.3)', 'hue-rotate(-10deg)'],
+                    vintage: ['sepia(0.3)', 'contrast(1.1)', 'brightness(1.1)'],
+                    vhs: ['contrast(1.2)', 'saturate(1.2)', 'blur(0.5px)'],
+                    neon: ['contrast(1.3)', 'saturate(1.5)', 'brightness(1.1)'],
+                    sepia: ['sepia(0.8)'],
+                    noir: ['grayscale(1)', 'contrast(1.3)'],
+                    cool: ['hue-rotate(20deg)', 'saturate(0.9)'],
+                    warm: ['hue-rotate(-20deg)', 'saturate(1.1)'],
+                    saturated: ['saturate(1.5)'],
+                };
+                return presets[preset] || [];
+            }
+
+            // Easing functions
+            easeOutCubic(t) {
+                return 1 - Math.pow(1 - t, 3);
+            }
+
+            easeInCubic(t) {
+                return t * t * t;
+            }
+
+            easeInOutCubic(t) {
+                return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            }
+        }
+
+        // Global renderer instance
+        const renderer = new MotionGraphicsRenderer();
+
+        // Global render function called from Python
+        window.renderFrame = function(frameIndex, frameTime) {
+            renderer.renderFrame(frameIndex, frameTime);
+        };
+
+        // Initialize when data is ready
+        function checkAndInitialize() {
+            if (window.timelineData && window.sourceVideo !== undefined) {
+                renderer.initialize(window.timelineData, window.sourceVideo);
+            } else {
+                setTimeout(checkAndInitialize, 100);
+            }
+        }
+
+        // Start checking
+        checkAndInitialize();
+    </script>
+</body>
+</html>
