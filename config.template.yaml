@@ -1,0 +1,159 @@
+# Cutter Video Editor Automation - Configuration Template
+# Copy this file to config.yaml and customize for your project
+
+# Project Settings
+project_name: "my_video"
+input_video: "raw_footage.mp4"
+audio_track: "music.mp3"
+output_directory: "./output"
+
+# Audio Analysis Settings
+audio_analysis:
+  # Sensitivity for beat detection: low, medium, high
+  audio_sensitivity: "medium"
+  # Beat detection threshold (0.0-1.0, higher = stricter)
+  beat_detection_threshold: 0.5
+
+# Shot Quality Scoring Weights (must sum to 1.0)
+shot_quality:
+  motion_weight: 0.25
+  face_detection_weight: 0.25
+  composition_weight: 0.15
+  contrast_weight: 0.25
+  lighting_weight: 0.10
+  # Minimum quality score for a shot to be considered (0.0-1.0)
+  min_quality_score: 0.4
+
+# Cut Timing Settings
+cut_timing:
+  # Target output video length in seconds
+  target_video_length: 60
+  # Minimum duration of a single cut in seconds
+  min_cut_duration: 0.5
+  # Maximum duration of a single cut in seconds
+  max_cut_duration: 5.0
+  # Cut pattern: low (longer cuts), medium (balanced), high (faster cuts)
+  cut_pattern: "balanced"
+
+# Motion Graphics Settings
+motion_graphics:
+  enabled: true
+  # Overall intensity: low, medium, high
+  intensity: "high"
+
+  # Text Animation Settings
+  text:
+    enabled: true
+    # Entrance animation: fade_in, slide_in, scale_up, bounce_in, morph, typewriter, blur_in, glitch_in
+    entrance_animation: "slide_in"
+    # Exit animation: fade_out, slide_out, scale_down, bounce_out, blur_out
+    exit_animation: "fade_out"
+    font_family: "Arial"
+    font_size: 96
+    font_color: "#FFFFFF"
+    glow_enabled: true
+    glow_intensity: 0.5
+    drop_shadow: true
+    # Text content to overlay (list of text items)
+    items: []
+
+  # Transition Settings
+  transitions:
+    enabled: true
+    # Style: geometric, organic, camera, distortion, dynamic (random mix)
+    style: "dynamic"
+    # Duration of transitions in seconds
+    duration: 0.3
+    # Specific transition types (optional, overrides style)
+    # Available: wipe, zoom, rotate, iris, kaleidoscope, diagonal, dissolve, ink_splash,
+    #            liquid, smoke, water, fire, cloud, pan, push, parallax, reveal, blinds,
+    #            shutter, whip, flurry, prism, glitch, mosaic, pixelate
+    types: []
+
+  # Particle Effects Settings
+  particles:
+    enabled: true
+    # Type: confetti, sparkles, rain, snow, explosion, bubbles
+    type: "confetti"
+    # Density: low, medium, high
+    density: "medium"
+    # Custom colors (optional, uses defaults if empty)
+    colors: []
+    # Trigger on energy peaks
+    audio_reactive: true
+
+# Color Grading Settings
+color_grading:
+  enabled: true
+  # LUT file path (.cube format, optional)
+  lut_file: null
+  # LUT strength (0-100)
+  lut_strength: 75
+  # Preset profile: cinematic, cyberpunk, vintage, VHS, neon, sepia, noir, cool, warm, saturated
+  preset_profile: "cinematic"
+  # Manual adjustments (0.0-2.0, 1.0 = no change)
+  saturation: 1.0
+  contrast: 1.0
+  brightness: 1.0
+  # Hue shift in degrees (-180 to 180)
+  hue_shift: 0
+  # Additional effects
+  effects:
+    blur: 0.0
+    glow: 0.0
+    grain: 0.0
+    chromatic_aberration: 0.0
+    vignette: 0.0
+
+# GPU Acceleration Settings (RTX 4090 optimized)
+gpu:
+  # Enable GPU acceleration (auto-detects NVIDIA GPU)
+  enabled: true
+  # NVENC encoder preset: ultrafast, fast, medium, slow, quality, max_quality
+  # For RTX 4090, "quality" or "max_quality" recommended for best results
+  encoder_preset: "quality"
+  # Use NVDEC for hardware video decoding
+  hardware_decode: true
+  # CUDA device index (0 for single GPU)
+  device: 0
+
+# Export Settings
+export:
+  # Output formats: mp4, json
+  formats: ["mp4"]
+  # Generate CapCut project file
+  capcut_projects: true
+  # Generate Final Cut Pro XML
+  fcp_xml: false
+  # Video encoding settings
+  video:
+    codec: "h264"
+    # Quality (CRF/CQ): 0-51, lower = better quality
+    # With GPU: 18-20 recommended (uses NVENC CQ mode)
+    # RTX 4090 can handle quality=15 for near-lossless
+    quality: 18
+    # Frame rate
+    fps: 30
+    # Bitrate (optional, overrides quality for specific target)
+    # For TikTok/Reels: "12M", YouTube: "20M", YouTube 4K: "50M"
+    bitrate: null
+  # Audio encoding settings
+  audio:
+    codec: "aac"
+    bitrate: "192k"
+  # Platform presets (overrides resolution)
+  # Options: tiktok, instagram_reels, youtube_shorts, youtube, youtube_4k, web
+  platform: "tiktok"
+
+# Edit Variation Settings
+variations:
+  # Number of variations to generate (1-5)
+  count: 3
+  # Sensitivity levels for each variation
+  sensitivities: ["low", "medium", "high"]
+
+# Logging Settings
+logging:
+  level: "INFO"
+  # Log file path (null = console only)
+  file: null
