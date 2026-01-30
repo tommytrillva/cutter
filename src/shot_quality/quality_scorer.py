@@ -52,6 +52,7 @@ class QualityScorer:
         prev_frame: Optional[np.ndarray] = None,
         frame_index: int = 0,
         timestamp: float = 0.0,
+        analysis_resolution: int = 480,
     ) -> FrameQuality:
         """Score a single frame.
 
@@ -60,16 +61,28 @@ class QualityScorer:
             prev_frame: Previous frame for motion detection.
             frame_index: Index of the frame.
             timestamp: Timestamp in seconds.
+            analysis_resolution: Max height for analysis (downscales large frames).
 
         Returns:
             FrameQuality object with all scores.
         """
+        import cv2
+
+        # Downscale large frames for faster analysis
+        h, w = frame.shape[:2]
+        if h > analysis_resolution:
+            scale = analysis_resolution / h
+            new_w, new_h = int(w * scale), int(h * scale)
+            frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            if prev_frame is not None and prev_frame.shape[0] > analysis_resolution:
+                prev_frame = cv2.resize(prev_frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
         # Use stored prev_frame if not provided
         if prev_frame is None:
             prev_frame = self._prev_frame
 
         # Calculate individual scores
-        if prev_frame is not None:
+        if prev_frame is not None and prev_frame.shape == frame.shape:
             motion_score = self.motion_detector.calculate_motion(frame, prev_frame)
         else:
             motion_score = 0.5  # Neutral score for first frame
@@ -88,7 +101,7 @@ class QualityScorer:
             lighting_score * self.lighting_weight
         )
 
-        # Store current frame for next iteration
+        # Store current frame for next iteration (downscaled)
         self._prev_frame = frame
 
         return FrameQuality(

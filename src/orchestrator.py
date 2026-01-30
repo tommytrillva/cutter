@@ -13,7 +13,7 @@ from .audio_analyzer import BeatDetector
 from .shot_quality import QualityScorer
 from .edit_generator import ShotSelector, EditVariationGenerator
 from .rendering_engine import FFmpegEncoder
-from .rendering_engine.browser_renderer import SimpleBrowserRenderer
+from .rendering_engine.browser_renderer import SimpleBrowserRenderer, StreamingRenderer, BrowserVideoRenderer
 from .project_exporter import TimelineSerializer, CapCutExporter, FCPExporter
 from .data_structures import VideoMetadata, BeatInfo, Edit, Shot
 
@@ -132,10 +132,26 @@ class ProjectManager:
     def _load_inputs(self):
         """Load and validate video and audio inputs."""
         input_video = self.config.get("input_video")
+        input_video_folder = self.config.get("input_video_folder")
         audio_track = self.config.get("audio_track")
 
+        # Handle video folder - find all video files
+        if input_video_folder and not input_video:
+            from pathlib import Path
+            video_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.m4v', '.MP4', '.MOV', '.AVI', '.MKV', '.M4V'}
+            folder = Path(input_video_folder)
+            video_files = sorted([f for f in folder.iterdir() if f.suffix in video_extensions])
+            if not video_files:
+                raise ValueError(f"No video files found in {input_video_folder}")
+            # Store all video files for later use
+            self.video_files = [str(f) for f in video_files]
+            input_video = self.video_files[0]  # Use first video for metadata
+            logger.info(f"Found {len(self.video_files)} video files in folder")
+        else:
+            self.video_files = [input_video] if input_video else []
+
         if not input_video:
-            raise ValueError("input_video is required in configuration")
+            raise ValueError("input_video or input_video_folder is required in configuration")
         if not audio_track:
             raise ValueError("audio_track is required in configuration")
 
@@ -178,7 +194,6 @@ class ProjectManager:
 
     def _score_shots(self):
         """Score video frames for quality and detect shots."""
-        input_video = self.config.get("input_video")
         quality_config = self.config.get("shot_quality", {})
 
         # Initialize scorer
@@ -190,9 +205,10 @@ class ProjectManager:
             lighting_weight=quality_config.get("lighting_weight", 0.10),
         )
 
-        # Sample frames
-        sample_count = min(int(self.video_metadata.total_frames), 500)
-        frame_generator = self.video_loader.sample_frames(input_video, sample_count)
+        # Sample frames from all video files (downscaled to 480p for speed)
+        input_video = self.video_files[0] if self.video_files else self.config.get("input_video")
+        sample_count = min(int(self.video_metadata.total_frames), 200)  # 200 samples is enough
+        frame_generator = self.video_loader.sample_frames(input_video, sample_count, max_height=480)
 
         # Score frames
         frame_qualities = scorer.score_all_frames(
@@ -295,7 +311,26 @@ class ProjectManager:
         return output_paths
 
     def _render_videos(self, output_dir: str) -> List[str]:
-        """Render output videos.
+        """Render output videos using configured rendering mode.
+
+        Args:
+            output_dir: Output directory.
+
+        Returns:
+            List of rendered video paths.
+        """
+        rendering_config = self.config.get("rendering", {})
+        render_mode = rendering_config.get("mode", "browser")
+
+        if render_mode == "browser":
+            logger.info("Using browser-based rendering (full motion graphics)")
+            return self._render_videos_browser(output_dir)
+        else:
+            logger.info("Using streaming renderer (fast, basic effects)")
+            return self._render_videos_streaming(output_dir)
+
+    def _render_videos_browser(self, output_dir: str) -> List[str]:
+        """Render output videos using browser-based renderer with full motion graphics.
 
         Args:
             output_dir: Output directory.
@@ -304,25 +339,121 @@ class ProjectManager:
             List of rendered video paths.
         """
         audio_track = self.config.get("audio_track")
-        input_video = self.config.get("input_video")
+        input_video = self.video_files[0] if self.video_files else self.config.get("input_video")
+        project_name = self.config.get("project_name", "video")
+        export_config = self.config.get("export", {})
+        rendering_config = self.config.get("rendering", {})
+
+        video_config = export_config.get("video", {})
+        platform = export_config.get("platform", "tiktok")
+        fps = video_config.get("fps", 30)
+
+        # Get dimensions from platform preset
+        platform_dims = {
+            "tiktok": (1080, 1920),
+            "instagram_reels": (1080, 1920),
+            "youtube_shorts": (1080, 1920),
+            "youtube": (1920, 1080),
+            "web": (1920, 1080),
+        }
+        width, height = platform_dims.get(platform, (1080, 1920))
+
+        # Get HTML template path
+        html_template = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "motion_graphics", "motion_graphics.html"
+        )
+
+        output_paths = []
+        videos_dir = os.path.join(output_dir, "videos")
+        os.makedirs(videos_dir, exist_ok=True)
+
+        # Load timeline JSON files
+        timelines_dir = os.path.join(output_dir, "timelines")
+        serializer = TimelineSerializer(self.config)
+
+        # Initialize FFmpeg encoder for final encoding
+        encoder = FFmpegEncoder(
+            codec=video_config.get("codec", "h264"),
+            quality=video_config.get("quality", 18),
+            fps=fps,
+        )
+
+        for i, edit in enumerate(self.edits):
+            logger.info(f"Rendering variation {i + 1}/{len(self.edits)} (browser-based)...")
+
+            # Load timeline data
+            timeline_path = os.path.join(
+                timelines_dir, f"{project_name}_variation_{i + 1}.json"
+            )
+            timeline_data = serializer.load_timeline(timeline_path)
+
+            # Output path
+            output_path = os.path.join(
+                videos_dir, f"{project_name}_variation_{i + 1}.mp4"
+            )
+
+            # Create temp directory for frames
+            with tempfile.TemporaryDirectory() as frames_dir:
+                # Initialize browser renderer
+                browser_config = rendering_config.get("browser", {})
+                renderer = BrowserVideoRenderer(
+                    width=width,
+                    height=height,
+                    fps=fps,
+                    headless=browser_config.get("headless", True),
+                )
+
+                try:
+                    # Render frames using async
+                    asyncio.run(
+                        renderer.render_timeline(
+                            timeline_json=timeline_path,
+                            html_template=html_template,
+                            output_dir=frames_dir,
+                            source_video=input_video,
+                        )
+                    )
+                finally:
+                    # Close browser
+                    asyncio.run(renderer.close())
+
+                # Encode frames to MP4 with audio
+                logger.info(f"Encoding frames to MP4...")
+                encoder.encode_from_frames(
+                    frames_dir=frames_dir,
+                    output_path=output_path,
+                    audio_path=audio_track,
+                )
+
+            output_paths.append(output_path)
+            logger.info(f"Rendered: {output_path}")
+
+        return output_paths
+
+    def _render_videos_streaming(self, output_dir: str) -> List[str]:
+        """Render output videos using streaming (no temp files, basic effects).
+
+        Args:
+            output_dir: Output directory.
+
+        Returns:
+            List of rendered video paths.
+        """
+        audio_track = self.config.get("audio_track")
+        input_video = self.video_files[0] if self.video_files else self.config.get("input_video")
         project_name = self.config.get("project_name", "video")
         export_config = self.config.get("export", {})
 
         video_config = export_config.get("video", {})
         platform = export_config.get("platform", "tiktok")
+        fps = video_config.get("fps", 30)
 
-        # Initialize encoder
-        encoder = FFmpegEncoder(
-            codec=video_config.get("codec", "h264"),
-            quality=video_config.get("quality", 18),
-            fps=video_config.get("fps", 30),
-        )
-
-        # Initialize simple renderer
-        renderer = SimpleBrowserRenderer(
+        # Initialize streaming renderer (no temp files!)
+        renderer = StreamingRenderer(
             width=self.video_metadata.width,
             height=self.video_metadata.height,
-            fps=video_config.get("fps", 30),
+            fps=fps,
         )
 
         output_paths = []
@@ -334,37 +465,30 @@ class ProjectManager:
         serializer = TimelineSerializer(self.config)
 
         for i, edit in enumerate(self.edits):
-            logger.info(f"Rendering variation {i + 1}/{len(self.edits)}...")
+            logger.info(f"Rendering variation {i + 1}/{len(self.edits)} (streaming to FFmpeg)...")
 
-            # Create temporary frame directory
-            with tempfile.TemporaryDirectory() as frames_dir:
-                # Load timeline data
-                timeline_path = os.path.join(
-                    timelines_dir, f"{project_name}_variation_{i + 1}.json"
-                )
-                timeline_data = serializer.load_timeline(timeline_path)
+            # Load timeline data
+            timeline_path = os.path.join(
+                timelines_dir, f"{project_name}_variation_{i + 1}.json"
+            )
+            timeline_data = serializer.load_timeline(timeline_path)
 
-                # Render frames
-                renderer.render_placeholder_frames(
-                    timeline_data,
-                    frames_dir,
-                    input_video,
-                )
+            # Output path
+            output_path = os.path.join(
+                videos_dir, f"{project_name}_variation_{i + 1}.mp4"
+            )
 
-                # Encode to video
-                output_path = os.path.join(
-                    videos_dir, f"{project_name}_variation_{i + 1}.mp4"
-                )
+            # Render directly to video (no temp PNG files)
+            renderer.render_video(
+                timeline_data=timeline_data,
+                output_path=output_path,
+                source_video=input_video,
+                audio_path=audio_track,
+                platform=platform,
+            )
 
-                encoder.encode_with_preset(
-                    frames_dir,
-                    output_path,
-                    platform,
-                    audio_track,
-                )
-
-                output_paths.append(output_path)
-                logger.info(f"Rendered: {output_path}")
+            output_paths.append(output_path)
+            logger.info(f"Rendered: {output_path}")
 
         return output_paths
 

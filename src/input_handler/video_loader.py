@@ -249,13 +249,14 @@ class VideoLoader:
             cap.release()
 
     def sample_frames(
-        self, path: str, num_samples: int = 100
+        self, path: str, num_samples: int = 100, max_height: int = 480
     ) -> Generator[Tuple[np.ndarray, int, float], None, None]:
         """Sample frames evenly distributed across video.
 
         Args:
             path: Path to video file.
             num_samples: Number of frames to sample.
+            max_height: Maximum frame height (downscales larger frames for speed).
 
         Yields:
             Tuple of (frame, frame_index, timestamp).
@@ -281,6 +282,13 @@ class VideoLoader:
                 ret, frame = cap.read()
 
                 if ret:
+                    # Downscale large frames for faster analysis
+                    h, w = frame.shape[:2]
+                    if h > max_height:
+                        scale = max_height / h
+                        new_w, new_h = int(w * scale), int(h * scale)
+                        frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
                     timestamp = idx / fps if fps > 0 else 0
                     yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), int(idx), timestamp
         finally:

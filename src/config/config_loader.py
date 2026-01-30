@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONFIG = {
     "project_name": "untitled",
     "input_video": None,
+    "input_video_folder": None,
     "audio_track": None,
     "output_directory": "./output",
     "audio_analysis": {
@@ -288,8 +289,8 @@ class ConfigValidator:
 
     def _validate_required_fields(self) -> None:
         """Validate required fields exist."""
-        if not self.config.get("input_video"):
-            self.errors.append("input_video is required")
+        if not self.config.get("input_video") and not self.config.get("input_video_folder"):
+            self.errors.append("input_video or input_video_folder is required")
 
         if not self.config.get("audio_track"):
             self.errors.append("audio_track is required")

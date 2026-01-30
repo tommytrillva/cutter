@@ -145,6 +145,19 @@ export:
   # Options: tiktok, instagram_reels, youtube_shorts, youtube, youtube_4k, web
   platform: "tiktok"
 
+# Rendering Settings
+rendering:
+  # Rendering mode:
+  # - "browser": Full motion graphics using Playwright + Chromium (Remotion-quality)
+  #              Supports text animations, particles, advanced transitions
+  # - "streaming": Fast rendering with basic effects (OpenCV-based)
+  #                Only supports video clips, color grading, basic transitions
+  mode: "browser"
+  # Browser-specific settings (only used when mode is "browser")
+  browser:
+    # Run browser in headless mode (no visible window)
+    headless: true
+
 # Edit Variation Settings
 variations:
   # Number of variations to generate (1-5)

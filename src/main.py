@@ -147,7 +147,7 @@ def apply_overrides(config: dict, args) -> dict:
 
 
 def run_from_timeline(timeline_path: str, output_path: str, audio_path: str = None):
-    """Render video from existing timeline.
+    """Render video from existing timeline (streaming, no temp files).
 
     Args:
         timeline_path: Path to timeline JSON.
@@ -155,11 +155,8 @@ def run_from_timeline(timeline_path: str, output_path: str, audio_path: str = No
         audio_path: Optional audio file path.
     """
     import json
-    import tempfile
-    import os
 
-    from .rendering_engine import FFmpegEncoder
-    from .rendering_engine.browser_renderer import SimpleBrowserRenderer
+    from .rendering_engine.browser_renderer import StreamingRenderer
 
     # Load timeline
     with open(timeline_path, 'r') as f:
@@ -175,30 +172,20 @@ def run_from_timeline(timeline_path: str, output_path: str, audio_path: str = No
     if not source_video:
         raise ValueError("Timeline does not specify source video")
 
-    # Initialize renderer
-    renderer = SimpleBrowserRenderer(
+    # Initialize streaming renderer (no temp files!)
+    renderer = StreamingRenderer(
         width=metadata.get("width", 1080),
         height=metadata.get("height", 1920),
         fps=metadata.get("fps", 30),
     )
 
-    # Initialize encoder
-    encoder = FFmpegEncoder(fps=metadata.get("fps", 30))
-
-    # Render frames
-    with tempfile.TemporaryDirectory() as frames_dir:
-        renderer.render_placeholder_frames(
-            timeline,
-            frames_dir,
-            source_video,
-        )
-
-        # Encode to video
-        encoder.encode_from_frames(
-            frames_dir,
-            output_path,
-            audio_path,
-        )
+    # Render directly to video
+    renderer.render_video(
+        timeline_data=timeline,
+        output_path=output_path,
+        source_video=source_video,
+        audio_path=audio_path,
+    )
 
     logger.info(f"Rendered video to {output_path}")
 

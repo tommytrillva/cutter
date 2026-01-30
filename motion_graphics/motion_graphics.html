@@ -31,7 +31,9 @@
             left: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
 
         /* Transition Layer */
@@ -222,7 +224,7 @@
 </head>
 <body>
     <div id="canvas">
-        <video id="video-layer" muted></video>
+        <div id="video-layer"></div>
         <div id="transition-layer"></div>
         <div id="text-layer"></div>
         <div id="particle-layer"></div>
@@ -234,6 +236,8 @@
         window.timelineData = null;
         window.sourceVideo = null;
         window.rendererReady = false;
+        window.useFrameInjection = false;
+        window.currentFrameDataUrl = null;
 
         // Renderer class
         class MotionGraphicsRenderer {
@@ -248,32 +252,45 @@
                 this.currentFrame = 0;
                 this.fps = 30;
                 this.particles = [];
+                this.useFrameInjection = false;
             }
 
             async initialize(timelineData, sourceVideo) {
                 this.timeline = timelineData;
                 this.fps = timelineData.metadata?.fps || 30;
+                this.useFrameInjection = window.useFrameInjection || !sourceVideo;
 
-                // Load source video
-                if (sourceVideo) {
-                    this.videoLayer.src = sourceVideo;
+                // If not using frame injection, try to load video element
+                if (!this.useFrameInjection && sourceVideo) {
+                    // Create video element dynamically
+                    const video = document.createElement('video');
+                    video.src = sourceVideo;
+                    video.muted = true;
+                    video.style.display = 'none';
+                    document.body.appendChild(video);
+                    this.videoElement = video;
+
                     await new Promise(resolve => {
-                        this.videoLayer.onloadeddata = resolve;
-                        this.videoLayer.onerror = resolve;
+                        video.onloadeddata = resolve;
+                        video.onerror = () => {
+                            // Fallback to frame injection if video fails to load
+                            this.useFrameInjection = true;
+                            resolve();
+                        };
                     });
                 }
 
                 // Apply initial color grading
                 this.applyColorGrading(timelineData.color_grading);
 
-                console.log('Renderer initialized');
+                console.log('Renderer initialized (frame injection: ' + this.useFrameInjection + ')');
                 window.rendererReady = true;
             }
 
             renderFrame(frameIndex, frameTime) {
                 this.currentFrame = frameIndex;
 
-                // Render video clip
+                // Render video clip (from injected frame or video element)
                 this.renderVideoClip(frameTime);
 
                 // Render transitions
@@ -287,9 +304,22 @@
             }
 
             renderVideoClip(frameTime) {
+                // If using frame injection, display the injected frame
+                if (this.useFrameInjection || window.useFrameInjection) {
+                    if (window.currentFrameDataUrl) {
+                        this.videoLayer.style.backgroundImage = `url(${window.currentFrameDataUrl})`;
+                        this.videoLayer.style.opacity = '1';
+                    } else {
+                        this.videoLayer.style.backgroundImage = 'none';
+                        this.videoLayer.style.backgroundColor = '#000';
+                        this.videoLayer.style.opacity = '1';
+                    }
+                    return;
+                }
+
+                // Fallback to video element (if available)
                 const timeline = this.timeline.timeline || [];
 
-                // Find active clip
                 let activeClip = null;
                 for (const clip of timeline) {
                     if (clip.type === 'video_clip') {
@@ -302,9 +332,11 @@
                     }
                 }
 
-                if (activeClip && this.videoLayer.src) {
+                if (activeClip && this.videoElement) {
                     const sourceTime = activeClip.source_start + (frameTime - activeClip.timeline_start);
-                    this.videoLayer.currentTime = sourceTime;
+                    this.videoElement.currentTime = sourceTime;
+                    // Capture frame to canvas and display
+                    // This is a fallback - frame injection is preferred
                     this.videoLayer.style.opacity = '1';
                 } else {
                     this.videoLayer.style.opacity = '0';
@@ -333,35 +365,160 @@
 
             applyTransition(style, progress) {
                 const layer = this.transitionLayer;
+                const eased = this.easeInOutCubic(progress);
+
+                // Reset previous styles
+                layer.style.cssText = `
+                    position: absolute;
+                    top: 0; left: 0;
+                    width: 100%; height: 100%;
+                    pointer-events: none;
+                `;
 
                 switch (style) {
+                    // Basic wipes
                     case 'wipe_left':
-                        layer.style.clipPath = `inset(0 ${(1 - progress) * 100}% 0 0)`;
+                        layer.style.clipPath = `inset(0 ${(1 - eased) * 100}% 0 0)`;
                         layer.style.background = '#000';
                         break;
                     case 'wipe_right':
-                        layer.style.clipPath = `inset(0 0 0 ${(1 - progress) * 100}%)`;
+                        layer.style.clipPath = `inset(0 0 0 ${(1 - eased) * 100}%)`;
                         layer.style.background = '#000';
                         break;
-                    case 'dissolve':
-                        layer.style.background = `rgba(0, 0, 0, ${1 - progress})`;
+                    case 'wipe_up':
+                        layer.style.clipPath = `inset(${(1 - eased) * 100}% 0 0 0)`;
+                        layer.style.background = '#000';
                         break;
-                    case 'zoom_in':
-                        layer.style.transform = `scale(${1 + (1 - progress) * 0.5})`;
-                        layer.style.opacity = progress;
+                    case 'wipe_down':
+                        layer.style.clipPath = `inset(0 0 ${(1 - eased) * 100}% 0)`;
+                        layer.style.background = '#000';
+                        break;
+
+                    // Geometric
+                    case 'diagonal_wipe':
+                        layer.style.clipPath = `polygon(0 0, ${eased * 200}% 0, 0 ${eased * 200}%)`;
+                        layer.style.background = '#000';
                         break;
                     case 'iris_in':
-                        layer.style.clipPath = `circle(${progress * 100}% at center)`;
+                    case 'iris':
+                        layer.style.clipPath = `circle(${eased * 75}% at center)`;
                         layer.style.background = '#000';
                         break;
-                    case 'glitch':
-                        if (Math.random() > 0.5) {
-                            layer.style.transform = `translateX(${(Math.random() - 0.5) * 20}px)`;
-                            layer.style.filter = `hue-rotate(${Math.random() * 360}deg)`;
+                    case 'iris_diamond':
+                        const size = eased * 150;
+                        layer.style.clipPath = `polygon(50% ${50 - size/2}%, ${50 + size/2}% 50%, 50% ${50 + size/2}%, ${50 - size/2}% 50%)`;
+                        layer.style.background = '#000';
+                        break;
+                    case 'clock_wipe':
+                        const angle = eased * 360;
+                        layer.style.background = `conic-gradient(from 0deg, transparent ${angle}deg, black ${angle}deg)`;
+                        break;
+
+                    // Dissolve/Fade
+                    case 'dissolve':
+                    case 'crossfade':
+                        layer.style.background = `rgba(0, 0, 0, ${1 - eased})`;
+                        break;
+                    case 'fade_black':
+                        if (progress < 0.5) {
+                            layer.style.background = `rgba(0, 0, 0, ${progress * 2})`;
+                        } else {
+                            layer.style.background = `rgba(0, 0, 0, ${(1 - progress) * 2})`;
                         }
                         break;
+                    case 'fade_white':
+                        if (progress < 0.5) {
+                            layer.style.background = `rgba(255, 255, 255, ${progress * 2})`;
+                        } else {
+                            layer.style.background = `rgba(255, 255, 255, ${(1 - progress) * 2})`;
+                        }
+                        break;
+
+                    // Zoom/Scale
+                    case 'zoom_in':
+                        this.videoLayer.style.transform = `scale(${1 + (1 - eased) * 0.5})`;
+                        layer.style.opacity = 1 - eased;
+                        break;
+                    case 'zoom_out':
+                        this.videoLayer.style.transform = `scale(${0.5 + eased * 0.5})`;
+                        layer.style.opacity = 1 - eased;
+                        break;
+
+                    // Camera moves
+                    case 'push_left':
+                        this.videoLayer.style.transform = `translateX(${(1 - eased) * 100}%)`;
+                        break;
+                    case 'push_right':
+                        this.videoLayer.style.transform = `translateX(${-(1 - eased) * 100}%)`;
+                        break;
+                    case 'push_up':
+                        this.videoLayer.style.transform = `translateY(${(1 - eased) * 100}%)`;
+                        break;
+                    case 'push_down':
+                        this.videoLayer.style.transform = `translateY(${-(1 - eased) * 100}%)`;
+                        break;
+                    case 'parallax':
+                        this.videoLayer.style.transform = `translateX(${(1 - eased) * 30}%) scale(${1 + (1 - eased) * 0.1})`;
+                        break;
+
+                    // Distortion
+                    case 'glitch':
+                    case 'glitch_heavy':
+                        const intensity = style === 'glitch_heavy' ? 2 : 1;
+                        if (Math.random() > 0.3) {
+                            const offsetX = (Math.random() - 0.5) * 20 * intensity;
+                            const offsetY = (Math.random() - 0.5) * 10 * intensity;
+                            this.videoLayer.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+                            this.videoLayer.style.filter = `hue-rotate(${Math.random() * 360}deg)`;
+                        }
+                        layer.style.opacity = Math.random() * 0.5 * (1 - progress);
+                        layer.style.background = Math.random() > 0.5 ? '#f0f' : '#0ff';
+                        break;
+                    case 'pixelate':
+                        // Simulated pixelate with blur
+                        const pixelSize = Math.max(1, Math.floor((1 - eased) * 20));
+                        this.videoLayer.style.filter = `blur(${pixelSize}px)`;
+                        break;
+                    case 'mosaic':
+                        const mosaicSize = Math.max(1, Math.floor((1 - eased) * 30));
+                        this.videoLayer.style.filter = `blur(${mosaicSize}px) contrast(1.5)`;
+                        break;
+                    case 'ripple':
+                        const ripplePhase = progress * Math.PI * 4;
+                        const rippleOffset = Math.sin(ripplePhase) * (1 - eased) * 10;
+                        this.videoLayer.style.transform = `translateX(${rippleOffset}px)`;
+                        break;
+
+                    // Organic
+                    case 'ink_splash':
+                        // Simulate ink with radial gradient
+                        layer.style.background = `radial-gradient(circle at ${50 + (Math.random() - 0.5) * 20}% ${50 + (Math.random() - 0.5) * 20}%, transparent ${eased * 150}%, black ${eased * 150 + 10}%)`;
+                        break;
+                    case 'smoke':
+                        layer.style.background = `rgba(50, 50, 50, ${(1 - eased) * 0.8})`;
+                        layer.style.filter = `blur(${(1 - eased) * 30}px)`;
+                        break;
+
+                    // Special
+                    case 'blinds':
+                        const numBlinds = 10;
+                        const blindProgress = eased * 100;
+                        layer.style.background = `repeating-linear-gradient(
+                            0deg,
+                            black 0%,
+                            black ${blindProgress / numBlinds}%,
+                            transparent ${blindProgress / numBlinds}%,
+                            transparent ${100 / numBlinds}%
+                        )`;
+                        break;
+                    case 'shutter':
+                        layer.style.clipPath = `inset(${(1 - eased) * 50}% 0)`;
+                        layer.style.background = '#000';
+                        break;
+
                     default:
-                        layer.style.opacity = 1 - progress;
+                        layer.style.opacity = 1 - eased;
+                        layer.style.background = '#000';
                 }
             }
 
@@ -495,9 +652,22 @@
 
             renderParticles(frameTime) {
                 const particleEffects = this.timeline.animations?.particles || [];
+                const beatInfo = this.timeline.beat_info || {};
+                const energyPeaks = beatInfo.energy_peaks || [];
 
                 // Clear old particles
                 this.particleLayer.innerHTML = '';
+
+                // Check if we're near an energy peak for burst effects
+                let nearPeak = false;
+                let peakIntensity = 0;
+                for (const peakTime of energyPeaks) {
+                    const distance = Math.abs(frameTime - peakTime);
+                    if (distance < 0.2) {
+                        nearPeak = true;
+                        peakIntensity = Math.max(peakIntensity, 1 - (distance / 0.2));
+                    }
+                }
 
                 for (const effect of particleEffects) {
                     const start = effect.start_time || 0;
@@ -506,8 +676,45 @@
 
                     if (frameTime >= start && frameTime < end) {
                         const localTime = frameTime - start;
-                        this.renderParticleEffect(effect, localTime, duration);
+                        // Boost density on energy peaks if audio_reactive is enabled
+                        const boostedEffect = {...effect};
+                        if (effect.audio_reactive && nearPeak) {
+                            boostedEffect.densityMultiplier = 1 + peakIntensity * 2;
+                        }
+                        this.renderParticleEffect(boostedEffect, localTime, duration);
                     }
+                }
+
+                // Trigger burst particles on energy peaks
+                if (nearPeak && peakIntensity > 0.5) {
+                    this.renderPeakBurst(peakIntensity);
+                }
+            }
+
+            renderPeakBurst(intensity) {
+                // Create a burst of particles at peak moments
+                const count = Math.floor(20 * intensity);
+                const colors = ['#ff0', '#f0f', '#0ff', '#fff'];
+
+                for (let i = 0; i < count; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle';
+
+                    const angle = (i / count) * Math.PI * 2;
+                    const distance = 10 + Math.random() * 20;
+                    const size = 5 + Math.random() * 10;
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+
+                    particle.style.width = `${size}px`;
+                    particle.style.height = `${size}px`;
+                    particle.style.backgroundColor = color;
+                    particle.style.borderRadius = '50%';
+                    particle.style.boxShadow = `0 0 ${size}px ${color}`;
+                    particle.style.left = `calc(50% + ${Math.cos(angle) * distance}vw)`;
+                    particle.style.top = `calc(50% + ${Math.sin(angle) * distance}vh)`;
+                    particle.style.opacity = intensity;
+
+                    this.particleLayer.appendChild(particle);
                 }
             }
 
@@ -515,8 +722,10 @@
                 const type = effect.particle_type || 'confetti';
                 const density = effect.density || 'medium';
                 const colors = effect.colors?.length ? effect.colors : this.getDefaultColors(type);
+                const densityMultiplier = effect.densityMultiplier || 1;
 
-                const count = { low: 20, medium: 50, high: 100 }[density] || 50;
+                const baseCount = { low: 20, medium: 50, high: 100 }[density] || 50;
+                const count = Math.floor(baseCount * densityMultiplier);
                 const progress = localTime / duration;
 
                 for (let i = 0; i < count; i++) {
@@ -619,13 +828,13 @@
                 const filters = [];
 
                 // Basic adjustments
-                if (grading.saturation !== 1) {
+                if (grading.saturation && grading.saturation !== 1) {
                     filters.push(`saturate(${grading.saturation})`);
                 }
-                if (grading.contrast !== 1) {
+                if (grading.contrast && grading.contrast !== 1) {
                     filters.push(`contrast(${grading.contrast})`);
                 }
-                if (grading.brightness !== 1) {
+                if (grading.brightness && grading.brightness !== 1) {
                     filters.push(`brightness(${grading.brightness})`);
                 }
                 if (grading.hue_shift) {
@@ -638,8 +847,9 @@
                 }
 
                 // Apply preset color grading
-                if (grading.preset) {
-                    const presetFilters = this.getPresetFilters(grading.preset);
+                const preset = grading.preset_profile || grading.preset;
+                if (preset) {
+                    const presetFilters = this.getPresetFilters(preset);
                     filters.push(...presetFilters);
                 }
 

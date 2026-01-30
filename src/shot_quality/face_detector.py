@@ -9,9 +9,15 @@ logger = logging.getLogger(__name__)
 # Try to import mediapipe
 try:
     import mediapipe as mp
-    MEDIAPIPE_AVAILABLE = True
+    # Check if solutions module exists (not available in all versions)
+    if hasattr(mp, 'solutions'):
+        MEDIAPIPE_AVAILABLE = True
+    else:
+        MEDIAPIPE_AVAILABLE = False
+        logger.warning("MediaPipe solutions not available. Using OpenCV cascade for face detection.")
 except ImportError:
     MEDIAPIPE_AVAILABLE = False
+    mp = None
     logger.warning("MediaPipe not available. Using OpenCV cascade for face detection.")
 
 
