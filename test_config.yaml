@@ -1,0 +1,60 @@
+project_name: "test_render"
+input_video: "/Users/trill/Downloads/Videos/DSCF0716.MOV"
+audio_track: "/Users/trill/Downloads/Misc/DayoneTommy- Cold Turkey .mp3"
+output_directory: "./test_output"
+
+audio_analysis:
+  audio_sensitivity: "medium"
+  beat_detection_threshold: 0.5
+
+shot_quality:
+  motion_weight: 0.25
+  face_detection_weight: 0.25
+  composition_weight: 0.15
+  contrast_weight: 0.25
+  lighting_weight: 0.10
+  min_quality_score: 0.3
+
+cut_timing:
+  target_video_length: 15
+  min_cut_duration: 0.5
+  max_cut_duration: 3.0
+  cut_pattern: "balanced"
+
+motion_graphics:
+  enabled: true
+  intensity: "high"
+  text:
+    enabled: false
+  transitions:
+    enabled: true
+    style: "dynamic"
+    duration: 0.3
+  particles:
+    enabled: true
+    type: "confetti"
+    density: "medium"
+    audio_reactive: true
+
+color_grading:
+  enabled: true
+  preset_profile: "cinematic"
+
+rendering:
+  mode: "streaming"
+  browser:
+    headless: true
+
+export:
+  formats: ["mp4"]
+  capcut_projects: false
+  fcp_xml: false
+  video:
+    codec: "h264"
+    quality: 23
+    fps: 30
+  platform: "tiktok"
+
+variations:
+  count: 1
+  sensitivities: ["medium"]

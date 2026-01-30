@@ -1,0 +1,60 @@
+project_name: Video_Projects
+input_video_folder: /Users/trill/Desktop/Miscellaneous/Video_Projects
+audio_track: /Users/trill/Downloads/grnded house remix.mp3
+output_directory: /Users/trill/Desktop/untitled folder/
+audio_analysis:
+  audio_sensitivity: medium
+  beat_detection_threshold: 0.5
+shot_quality:
+  motion_weight: 0.25
+  face_detection_weight: 0.25
+  composition_weight: 0.15
+  contrast_weight: 0.25
+  lighting_weight: 0.1
+  min_quality_score: 0.4
+cut_timing:
+  target_video_length: 60
+  min_cut_duration: 0.5
+  max_cut_duration: 5.0
+  cut_pattern: balanced
+motion_graphics:
+  enabled: true
+  intensity: high
+  text:
+    enabled: false
+  transitions:
+    enabled: true
+    style: dynamic
+    duration: 0.3
+  particles:
+    enabled: true
+    type: confetti
+    density: medium
+    audio_reactive: true
+color_grading:
+  enabled: true
+  preset_profile: cinematic
+  saturation: 1.0
+  contrast: 1.0
+  brightness: 1.0
+rendering:
+  mode: streaming  # 'streaming' = fast, no temp files; 'browser' = full motion graphics
+export:
+  formats:
+  - mp4
+  capcut_projects: true
+  fcp_xml: false
+  video:
+    codec: h264
+    quality: 18
+    fps: 30
+  audio:
+    codec: aac
+    bitrate: 192k
+  platform: instagram_reels
+variations:
+  count: 3
+  sensitivities:
+  - low
+  - medium
+  - high
